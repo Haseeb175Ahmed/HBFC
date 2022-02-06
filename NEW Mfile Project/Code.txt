@@ -1,0 +1,228 @@
+﻿
+
+[System.Web.Mvc.HttpPost]
+        public ActionResult  UpdateObject()
+        { 
+            try
+            {
+                var client = new MFWSClient(domain);
+
+
+               var fileName= TempData["FileNames"] as List<string>;
+
+                foreach (var item in fileName)
+                {
+                    var objects = ObjectProps.UpdateObject(item);
+
+                    var addDetails = obj.InsertobjectProps(objects[0].Title, objects[0].ObjVer.Type, objects[0].ObjVer.ID, objects[0].ObjVer.Version, objects[0].Files[0].ID);
+
+                }
+            }
+            catch (Exception ex)
+            {
+
+                return Json(new { success = false, message = ex.Message }, JsonRequestBehavior.AllowGet);
+            }
+            
+            return Json(new { success = true, message= "Upated Successfully" }, JsonRequestBehavior.AllowGet);
+
+
+        }
+
+
+
+
+        [System.Web.Mvc.HttpPost]
+        public  ActionResult GetWorkFlow(int ObjID, int type, int version)
+        {
+            var Object = new ObjectWorkflowState();
+            try
+            {
+
+                string url = domain+"REST/objects/" + type + "/" + ObjID + "/" + version + "/workflowstate";
+                string AuthenticationToken = AuthToken();
+                // Create the web request.
+
+                WebRequest request = WebRequest.Create(url);
+                request.UseDefaultCredentials = true;
+                request.Headers["X-Authentication"] = AuthenticationToken;
+                var createResponse = request.GetResponse();
+                var serializer1 = new JsonSerializer();
+                var responseStream = createResponse.GetResponseStream();
+                using (var sr = new StreamReader(responseStream))
+                using (var jsonTextReader = new JsonTextReader(sr))
+                {
+                    Object = serializer1.Deserialize<ObjectWorkflowState>(jsonTextReader);
+                }
+             
+            }
+            catch (Exception ex)
+            {
+
+                return Json(new { success = false, message = ex.Message }, JsonRequestBehavior.AllowGet);
+            }
+
+            return Json(new { success = true, message = Object }, JsonRequestBehavior.AllowGet);
+
+
+
+        }
+
+        
+        public static void GetObjectHistory(int ObjID, int type, int version)
+        {
+            var Object = new VersionComment();
+            try
+            {
+                string url = domain + "REST/objects/" + type + "/" + ObjID + "/" + version + "/workflowstate";
+                string AuthenticationToken = AuthToken();
+                // Create the web request.
+
+                WebRequest request = WebRequest.Create(url);
+                request.UseDefaultCredentials = true;
+                request.Headers["X-Authentication"] = AuthenticationToken;
+                var createResponse = request.GetResponse();
+                var serializer1 = new JsonSerializer();
+                var responseStream = createResponse.GetResponseStream();
+                using (var sr = new StreamReader(responseStream))
+                using (var jsonTextReader = new JsonTextReader(sr))
+                {
+                    Object = serializer1.Deserialize<VersionComment>(jsonTextReader);
+                }
+
+            }
+            catch (Exception ex)
+            {
+
+                //return Json(new { success = false, message = "Error Occured" }, JsonRequestBehavior.AllowGet);
+            }
+
+            //return Json(new { success = true, message = Object }, JsonRequestBehavior.AllowGet);
+
+
+
+        }
+
+        public ObjectVersion CreateObjectf(Stream file, string AuthenticationToken, string name)
+        {
+            // First upload the file.
+            var createdObject = new ObjectVersion();
+            // Create the file upload request.
+            try
+            {
+                string uploadUrl = domain + "REST/files";
+                var uploadRequest = WebRequest.Create(uploadUrl);
+                uploadRequest.Method = "POST";
+
+                // Fill the authentication information.
+                uploadRequest.Headers["X-Authentication"] = AuthenticationToken;
+
+                // Upload the file.
+                uploadRequest.ContentType = "application/octet-stream";
+                var uploadStream = uploadRequest.GetRequestStream();
+
+                //StreamReader wr = new StreamReader(@"C:\Users\Haseeb Ahmed\Downloads\Project-description-short.pdf");
+                //var res = wr.BaseStream;
+                Stream fs = file;
+                fs.CopyTo(uploadStream);
+
+                // Get the upload information from the response.
+                // The information is in the response stream in JSON format.
+                // DataContractJsonSerializer lets us deserialize it back into an object.
+                var uploadResponse = uploadRequest.GetResponse();
+                var uploadSerializer = new DataContractJsonSerializer(typeof(UploadInfo));
+                var uploadInfo = (UploadInfo)uploadSerializer.ReadObject(uploadResponse.GetResponseStream());
+                uploadInfo.Title = name;
+                uploadInfo.Extension = "Html";
+
+                // Once the file is uploaded it can be used in object creation.
+
+                // Construct the URL.
+                // For object creation the URL only specifies the type.
+                string url = domain + "REST/objects/0";
+                var createRequest = WebRequest.Create(url);
+                createRequest.Method = "POST";
+                createRequest.Headers["X-Authentication"] = AuthenticationToken;
+
+                // Create the creation info.
+                var creationInfo = new ObjectCreationInfo
+                {
+                    PropertyValues = new[]
+                    {
+                    new PropertyValue()
+                    {
+                        PropertyDef = 100, // The built-in "Class" property Id.
+			            TypedValue = new TypedValue()
+                        {
+                            DataType = MFDataType.Lookup,
+                            Lookup = new Lookup()
+                            {
+                                Item = 0, // The built-in "Other Document" class Id.
+					            Version = -1 // Work around the bug detailed below.
+				            }
+                        }
+                    },
+                    new PropertyValue()
+                    {
+                        PropertyDef = 0, // The built-in "Name or Title" property Id.
+			            TypedValue =  new TypedValue()
+                        {
+                            DataType = MFDataType.Text,
+                            Value = name
+                        }
+                    },
+                    new PropertyValue()
+                    {
+                        PropertyDef = 1004, // The built-in "keyWOrd" property Id.
+			            TypedValue =  new TypedValue()
+                        {
+                            DataType = MFDataType.Text,
+                            Value = name+" "+"Comments"
+                        }
+                    }
+
+
+
+
+    },
+                    Files = new[] { uploadInfo }
+                };
+
+                // Send the creation info to the server.
+                // Use JSON serializer to serialize it to the request stream.
+                var infoSerializer = new DataContractJsonSerializer(typeof(ObjectCreationInfo));
+                infoSerializer.WriteObject(createRequest.GetRequestStream(), creationInfo);
+
+                // Now get the response.
+                var createResponse = createRequest.GetResponse();
+
+                var serializer1 = new JsonSerializer();
+                var responseStream = createResponse.GetResponseStream();
+                using (var sr = new StreamReader(responseStream))
+                using (var jsonTextReader = new JsonTextReader(sr))
+                {
+                    createdObject = serializer1.Deserialize<ObjectVersion>(jsonTextReader);
+                }
+
+                if (createdObject != null)
+                {
+                    var addDetails = obj.InsertobjectProps(createdObject.Title, createdObject.ObjVer.Type, createdObject.ObjVer.ID, createdObject.ObjVer.Version, createdObject.Files[0].ID);
+
+                    ViewBag.Title = "Comments Uploded SuccessFully";
+                }
+            }
+            catch (Exception ex)
+            {
+
+                throw;
+            }
+            // Return the newly created object.
+            return createdObject;
+
+        }
+
+
+
+
+
+

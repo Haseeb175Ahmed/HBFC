@@ -1,0 +1,1193 @@
+﻿
+@{
+
+}
+<head>
+
+    @*<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>*@
+    @*<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>*@
+    @*<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">*@
+
+    <script src="~/Content/jquery.min.js"></script>
+    <script src="~/Content/bootstrap.bundle.min.js"></script>
+    <link href="~/Content/font-awesome.min.css" rel="stylesheet" />
+    <link href="~/Content/tcdn.css" rel="stylesheet" />
+    
+
+
+    @*Scripts For Signature*@
+
+    @*<meta charset="UTF-8">
+    <title>SigCaptX-Capture</title>
+    <script src="~/Scripts/wgssSigCaptX.js"></script>
+    <script src="~/Scripts/base64.js"></script>
+    <script src="~/Scripts/SigCaptX-Utils.js"></script>
+    <script src="~/Scripts/SigCaptX-SessionControl.js"></script>
+    <script src="~/Scripts/SigCaptX-Globals.js"></script>
+    <script src="~/Content/jquery.min.js"></script>
+
+    <script type="text/javascript">
+
+        
+        //  This function enables the Restore button if the user has selected the option to output SigText
+        function enableRestoreButton() {
+            var btnRestore = document.getElementById("Restore");
+
+            if (document.getElementById("chkShowSigText").checked) {
+                btnRestore.disabled = false;
+            }
+            else {
+                btnRestore.disabled = true;
+            }
+        }
+
+        /*  This is the main function for capturing the signature from the pad */
+        function capture() {
+
+            if (!wgssSignatureSDK.running || null == dynCapt) {
+                print("Session error. Restarting the session.");
+                actionWhenRestarted(window.Capture);   // See SigCaptX-SessionControl.js
+                return;
+            }
+
+            // Construct a hash object to contain the hash
+            var hash = new wgssSignatureSDK.Hash(onHashConstructor);
+
+            function onHashConstructor(hashV, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    GetHash(hash, onGetInitialHash);
+                }
+                else {
+                    print("Hash Constructor error: " + status);
+                    if (wgssSignatureSDK.ResponseStatus.INVALID_SESSION == status) {
+                        print("Error: invalid session. Restarting the session.");
+                        actionWhenRestarted(window.Capture);
+                    }
+                }
+            }
+
+            // If the hash value has been calculated successfully next steps is to capture the signature
+            function onGetInitialHash() {
+                var firstName = document.getElementById("fname").value;
+                var reason = document.getElementById("reason").value;
+                var fullName = firstName;
+
+                if (true) {
+
+                }
+
+                dynCapt.Capture(sigCtl, fullName, reason, hash, null, onDynCaptCapture);
+            }
+
+            function onDynCaptCapture(dynCaptV, SigObjV, status) {
+                if (wgssSignatureSDK.ResponseStatus.INVALID_SESSION == status) {
+                    print("Error: invalid session. Restarting the session.");
+                    actionWhenRestarted(window.Capture);  // See SigCaptX-SessionControl.js
+                }
+                else {
+                    /* Check the status returned from the signature capture */
+                    switch (status) {
+                        case wgssSignatureSDK.DynamicCaptureResult.DynCaptOK:
+                            sigObj = SigObjV;
+                            print("Signature captured successfully");
+
+                            /* Set the RenderBitmap flags as appropriate depending on whether the user wants to use a picture image or B64 text value */
+                            if (document.getElementById("chkUseB64Image").checked) {
+                                var outputFlags = wgssSignatureSDK.RBFlags.RenderOutputBase64 | wgssSignatureSDK.RBFlags.RenderColor32BPP;
+                            }
+                            else {
+                                var outputFlags = wgssSignatureSDK.RBFlags.RenderOutputPicture | wgssSignatureSDK.RBFlags.RenderColor32BPP;
+                            }
+                            sigObj.RenderBitmap(BITMAP_IMAGEFORMAT, imageBox.clientWidth, imageBox.clientHeight, BITMAP_INKWIDTH, BITMAP_INKCOLOR, BITMAP_BACKGROUNDCOLOR, outputFlags, BITMAP_PADDING_X, BITMAP_PADDING_Y, onRenderBitmap);
+                            break;
+
+                        case wgssSignatureSDK.DynamicCaptureResult.DynCaptCancel:
+                            print("Signature capture cancelled");
+                            break;
+
+                        case wgssSignatureSDK.DynamicCaptureResult.DynCaptPadError:
+                            print("No capture service available");
+                            break;
+
+                        case wgssSignatureSDK.DynamicCaptureResult.DynCaptError:
+                            print("Tablet Error");
+                            break;
+
+                        case wgssSignatureSDK.DynamicCaptureResult.DynCaptNotLicensed:
+                            print("No valid Signature Capture licence found");
+                            break;
+
+                        default:
+                            print("Capture Error " + status);
+                            break;
+                    }
+                }
+            }
+
+            function onRenderBitmap(sigObjV, bmpObj, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    var imageBox = document.getElementById("imageBox");
+                    var useB64Image = document.getElementById("chkUseB64Image").checked;
+
+                    /* If the user wants to demonstrate the use of B64 image strings then define an image and set its source to the B64 string*/
+                    if (useB64Image) {
+                        print("base64_image:>" + bmpObj + "<");
+                        img = new Image();
+                        img.src = "data:image/png;base64," + bmpObj;
+
+                        if (null == imageBox.firstChild) {
+                            imageBox.appendChild(img);
+                        }
+                        else {
+                            imageBox.replaceChild(img, imageBox.firstChild);
+                        }
+                    }
+                    else {
+                        /* If RenderBitmap generated a standard image (picture) then just place that picture in the img control on the HTML form */
+                        if (null == imageBox.firstChild) {
+                            imageBox.appendChild(bmpObj.image);
+                        }
+                        else {
+                            imageBox.replaceChild(bmpObj.image, imageBox.firstChild);
+                        }
+                    }
+                    /* If the user chose the option to show the SigText value on the form then call the function to do this */
+                    if (document.getElementById("chkShowSigText").checked) {
+                        sigObjV.GetSigText(onGetSigText);
+                    }
+                }
+                else {
+                    print("Signature Render Bitmap error: " + status);
+                }
+            }
+
+            /* This function takes the SigText value returned by the callback and places it in the txtSignature tag on the form */
+            function onGetSigText(sigObjV, text, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    var txtSignature = document.getElementById("txtSignature");
+                    txtSignature.value = text;
+                }
+                else {
+                    print("Signature Render Bitmap error: " + status);
+                }
+            }
+        }
+
+        /* This function displays the details of the signature in the text box on the HTML form */
+
+        function displaySignatureDetails(sigObj) {
+            if (!wgssSignatureSDK.running || null == sigObj) {
+                print("Session error. Restarting the session.");
+                actionWhenRestarted(window.DisplaySignatureDetails);  // See SigCaptX-SessionControl.js
+                return;
+            }
+            sigObj.GetIsCaptured(onGetIsCaptured);
+
+            function onGetIsCaptured(sigObj, isCaptured, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    if (!isCaptured) {
+                        print("No signature has been captured yet.");
+                        return;
+                    }
+                    sigObj.GetWho(onGetWho);
+                }
+                else {
+                    print("Signature GetWho error: " + status);
+                    if (wgssSignatureSDK.ResponseStatus.INVALID_SESSION == status) {
+                        print("Session error. Restarting the session.");
+                        actionWhenRestarted(window.displaySignatureDetails);  // See SigCaptX-SessionControl.js
+                    }
+                }
+            }
+
+            function onGetWho(sigObjV, who, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    print("  Name:   " + who);
+                    var tz = wgssSignatureSDK.TimeZone.TimeLocal;
+                    sigObj.GetWhen(tz, onGetWhen);
+                }
+                else {
+                    print("Signature GetWho error: " + status);
+                }
+            }
+
+            function onGetWhen(sigObjV, when, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    print("  Date:   " + when.toString());
+                    sigObj.GetWhy(onGetWhy);
+                }
+                else {
+                    print("Signature GetWhen error: " + status);
+                }
+            }
+
+            function onGetWhy(sigObjV, why, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    print("  Reason: " + why);
+                }
+                else {
+                    print("Signature GetWhy error: " + status);
+                }
+            }
+        }
+
+        // This function calculates a hash value using the first and last names on the HTML form
+        function GetHash(hash, callback) {
+            print("Creating hash:");
+            hash.Clear(onClear);
+
+            function onClear(hashV, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    hash.PutType(wgssSignatureSDK.HashType.HashMD5, onPutType);
+                }
+                else {
+                    print("Hash Clear error: " + status);
+                }
+            }
+
+            function onPutType(hashV, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    var vFname = new wgssSignatureSDK.Variant();
+                    vFname.Set(document.getElementById("fname").value);
+                    hash.Add(vFname, onAddFname);
+                }
+                else {
+                    print("Hash PutType error: " + status);
+                }
+            }
+
+            function onAddFname(hashV, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    var vLname = new wgssSignatureSDK.Variant();
+                    vLname.Set(document.getElementById("reason").value);
+                    hash.Add(vLname, onAddLname);
+                }
+                else {
+                    print("Hash Add error: " + status);
+                }
+            }
+
+            function onAddLname(hashV, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    callback();
+                }
+                else {
+                    print("Hash Add error: " + status);
+                }
+            }
+        }
+
+        // This function recalculates the hash value from the first and last names
+        // and checks it against the hash embedded in the signature object
+        function verifySignedData() {
+            print("Verifying signed data...");
+            if (null == sigObj) {
+                actionWhenRestarted(window.VerifySig);
+                return;
+            }
+            var hash = null;
+            sigObj.GetIsCaptured(onGetIsCaptured);
+
+            function onGetIsCaptured(sigObjV, isCaptured, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    if (isCaptured) {
+                        hash = new wgssSignatureSDK.Hash(onHashConstructor);
+                    }
+                    else {
+                        print("Signature not captured");
+                    }
+                }
+                else {
+                    print("GetIsCaptured error: " + status);
+                    if (wgssSignatureSDK.ResponseStatus.INVALID_SESSION == status) {
+                        print("Error: invalid session. Restarting the session.");
+                        actionWhenRestarted(window.VerifySig);
+                    }
+                }
+            }
+
+            function onHashConstructor(hashV, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    GetHash(hash, onGetHashForVerification);
+                }
+                else {
+                    print("Hash Constructor error: " + status);
+                }
+            }
+
+            function onGetHashForVerification() {
+                sigObj.CheckSignedData(hash, onCheckSignedData);
+            }
+
+            function onCheckSignedData(hash, status) {
+                print("Verify result: " + status);
+                if (wgssSignatureSDK.SignedData.DataGood == status) {
+                    print("Signed Data OK");
+                }
+                else {
+                    print("Signed Data Has Changed");
+                }
+            }
+        }
+
+        /* This function clears the current signature image from the signature control on the form */
+        function clearSignature() {
+            var imageBox = document.getElementById("imageBox");
+            if (null != imageBox.firstChild) {
+                imageBox.removeChild(imageBox.firstChild);
+            }
+            if (null == sigObj) {
+                actionWhenRestarted(window.ClearSignature);  // See SigCaptX-SessionControl.js
+                return;
+            }
+            sigObj.Clear(onClearSig);
+
+            function onClearSig(sigObjV, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK != status) {
+                    print("ClearSignature() error: " + status);
+                    if (wgssSignatureSDK.ResponseStatus.INVALID_SESSION == status) {
+                        print("Session error. Restarting the session.");
+                        actionWhenRestarted(window.ClearSignature);  // See SigCaptX-SessionControl.js
+                    }
+                }
+            }
+        }
+
+        /* This function takes the SigText value currently displayed on the HTML form and uses it to recreate the signature image shown in the signature control tag on the form */
+        function setSignatureText() {
+            if (null == sigObj) {
+                actionWhenRestarted(window.SetSignatureText);  // See SigCaptX-SessionControl.js
+                return;
+            }
+            /* First of all take the SigText value currently displayed in the txtSignature field on the form and assign it to the sigObj object */
+            var text = document.getElementById("txtSignature").value;
+            sigObj.PutSigText(text, onPutSigText);
+
+            function onPutSigText(sigObjV, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    /* Now that the sigObj has been populated with the signature data (via the SigText) it can be used to geberate a signature image */
+                    var outputFlags = wgssSignatureSDK.RBFlags.RenderOutputPicture | wgssSignatureSDK.RBFlags.RenderColor24BPP;
+                    var imageBox = document.getElementById("imageBox");
+
+                    sigObj.RenderBitmap(BITMAP_IMAGEFORMAT, imageBox.clientWidth, imageBox.clientHeight, BITMAP_INKWIDTH, BITMAP_INKCOLOR, BITMAP_BACKGROUNDCOLOR, outputFlags, BITMAP_PADDING_X, BITMAP_PADDING_Y, onRenderBitmapFromSigText);
+                }
+                else {
+                    print("SetSignatureText() error: " + status);
+                    if (wgssSignatureSDK.ResponseStatus.INVALID_SESSION == status) {
+                        print("Session error. Restarting the session.");
+                        actionWhenRestarted(window.SetSignatureText);  // See SigCaptX-SessionControl.js
+                    }
+                }
+            }
+
+            /* Take the image generated by RenderBitmap and use it to populate the signature image control on the form */
+            function onRenderBitmapFromSigText(sigObjV, bmpObj, status) {
+                if (wgssSignatureSDK.ResponseStatus.OK == status) {
+                    var imageBox = document.getElementById("imageBox");
+                    if (null == imageBox.firstChild) {
+                        imageBox.appendChild(bmpObj.image);
+                    }
+                    else {
+                        imageBox.replaceChild(bmpObj.image, imageBox.firstChild);
+                    }
+                }
+                else {
+                    print("Signature Render Bitmap error: " + status);
+                }
+            }
+        }
+    </script>*@
+
+
+</head>
+<style>
+    .card {
+        width: 100%;
+        padding: 30px;
+        box-shadow: 0px 8px 16px 0px #1976D2;
+        max-width: 511px
+    }
+
+    
+
+    .card0 {
+        width: 100%;
+        padding-right: 30px;
+        box-shadow: none
+    }
+
+    .card1 {
+        background: linear-gradient(rgba(255, 255, 255, .2), rgba(255, 255, 255, .2)), url("https://i.imgur.com/AMBgumm.jpg");
+        min-height: 600px
+    }
+
+    .btn-yellow {
+        border: 2px solid #F9A825;
+        background-color: #F9A825;
+        color: #fff;
+        font-weight: bold;
+        letter-spacing: 1px
+    }
+
+        .btn-yellow:hover {
+            background-color: #F57F17;
+            border: 2px solid #F57F17
+        }
+
+    .btn-inverse {
+        border: 2px solid #F9A825;
+        background-color: transparent;
+        color: #F9A825;
+        font-weight: bold;
+        letter-spacing: 1px
+    }
+
+        .btn-inverse:hover {
+            background-color: #F57F17;
+            color: #fff;
+            border: 2px solid #F57F17
+        }
+
+    ::placeholder {
+        color: #E0E0E0;
+        opacity: 1
+    }
+
+    :-ms-input-placeholder {
+        color: #E0E0E0
+    }
+
+
+    input {
+        padding: 1px 0px 3px 0px;
+        border: none;
+        border-bottom: 1px solid lightgrey;
+        margin-bottom: 3px;
+        margin-top: 2px;
+        box-sizing: border-box;
+        color: #000;
+        font-size: 16px;
+        letter-spacing: 1px;
+        font-weight: 500
+    }
+
+        input:focus {
+            -moz-box-shadow: none !important;
+            -webkit-box-shadow: none !important;
+            box-shadow: none !important;
+            border-bottom: 1px solid #EF5350;
+            outline-width: 0
+        }
+
+    button:focus {
+        -moz-box-shadow: none !important;
+        -webkit-box-shadow: none !important;
+        box-shadow: none !important;
+        outline-width: 0
+    }
+
+    a:hover {
+        color: inherit
+    }
+
+    .text-sm {
+        font-size: 14px
+    }
+
+    .text-dim {
+        color: #BDBDBD
+    }
+
+    .icon {
+        width: 20px;
+        height: 20px;
+        cursor: pointer
+    }
+
+    @@media screen and (max-width: 1056px) {
+        .card {
+            width: 100%
+        }
+
+        .align {
+            justify-content: center !important
+        }
+    }
+</style>
+
+<body>
+
+    <div class="row">
+
+     <div class="col-md-12">
+            <section id="loginForm">
+
+
+
+                <div class="form-group">
+                    @if (!Object.ReferenceEquals(null, TempData["ID"]))
+                    {
+                        <p>Comments for Object @TempData["name"]-@TempData["ID"]</p>
+                        <input type="hidden" id="DocID" value="@TempData["ID"]" />
+                        <input type="hidden" id="DocName" value="@TempData["name"]" />
+
+                    }
+
+                    <div class="col-md-12">
+                        <div class="input-group" id="commentDiv">
+
+                            @{
+                                if (ViewBag.HtmlData == null)
+                                {
+                                    <textarea id="comentBox" class="form-control input-lg textarea-editor" rows="50" style="resize:none;width:400px;"></textarea>
+                                }
+                                else
+                                {
+                                    <textarea id="comentBox" class="form-control input-lg textarea-editor" rows="50" style="resize:none;width:400px;" onchange="SaveComment('db')">@ViewBag.HtmlData</textarea>
+
+                                }
+                            }
+
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="row">
+                        <div class="col-md-4 col-sm-4">
+
+                            <button type="button" class="btn btn-primary" onclick="SaveCommentDB(0)">Save Temporary</button>
+                        </div>
+
+                        <div class="col-md-4  col-sm-4">
+                            <button type="button" class="btn btn-success" data-toggle="modal" data-target="#AuthModal">
+
+                                Close Comment
+                            </button>
+                        </div>
+
+                        <div class="col-md-4  col-sm-4">
+
+                            <button type="button" class="btn btn-info" onclick="GetPreviousComment()">
+
+                                Previous Comment
+                            </button>
+                        </div>
+                    </div>
+
+
+                </div>
+
+                <div class="modal" id="AuthModal" tabindex="-1" role="dialog">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content" style="background-color: #fff0;">
+
+                            <div class="row d-flex justify-content-between align">
+
+                                <div class="card p-0 border-0 rounded-0 mb-5">
+                                    <div class="card border-0 rounded-0 card0">
+                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                            <span aria-hidden="true">&times;</span>
+                                        </button>
+                                        <center> <h3>Verify Signature</h3></center>
+                                        <label class="font-weight-bold mb-0">User Name</label>
+                                        <input type="text" id="name" class="mb-4" placeholder="User Name">
+                                        <label class="font-weight-bold mb-0">Signature Password</label>
+                                        <input type="password" id="Lpassword" placeholder="&#9679;&#9679;&#9679;&#9679;&#9679;">
+
+                                        @*<div id="imageBox1" class="boxed" style="height:35mm;width:60mm; visibility:hidden; border:1px solid #d3d3d3;" ondblclick="displaySignatureDetails(sigObj)" title="Double-click a signature to display its details">
+                                        </div>*@
+
+                                        <center>
+                                            <img src="~/Content/images/loading.gif" id="img_load" width="50" height="50" style="visibility:hidden" />
+                                        </center>
+                                        <div class="row justify-content-center mt-4">
+                                            <center>
+                                                <button type="submit" class="btn btn-yellow px-5" onclick="SaveComment()">Sign</button>
+                                               @* <button type="submit" class="btn btn-yellow px-5" onclick="Addsign()">Add Sign</button>*@
+                                            </center>
+                                        </div>
+
+
+                                    </div>
+                                </div>
+
+
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+
+
+
+                <div class="modal fade"  id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="exampleModalLabel">Add Signature</h5>
+                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                <div>
+
+                                    <table style="padding: 10px 20px;">
+                                        <tr>
+                                            <td rowspan="3">
+                                                <div id="imageBox" class="boxed" style="height:35mm;width:60mm; border:1px solid #d3d3d3;" ondblclick="displaySignatureDetails(sigObj)" title="Double-click a signature to display its details">
+                                                </div>
+                                            </td>
+                                            <td style="padding: 10px 20px;">
+                                                <input type="button" value="Capture" style="height:10mm;width:35mm" onclick="capture()"
+                                                       title="Starts signature capture" />
+                                            </td>
+
+                                            <td style="padding: 10px 20px;">
+                                                <input type="button" value="Save" style="height:10mm;width:35mm" onclick="SaveSignature()" />
+                                            </td>
+                                            
+                                    </table>
+                                    <table style="padding: 10px 20px;">
+
+                                        <tr>
+                                            <td>
+                                                First name: <input type="text" id="fname" value="John" />
+                                            </td>
+                                            <td>
+                                                Reason: <input type="text" id="reason" value="Smith" />
+                                            </td>
+                                        </tr>
+                                    </table>
+
+                                    <input type="checkbox" style="visibility: hidden;" id="chkUseB64Image" />
+                                    <input type="checkbox" style="visibility: hidden;" id="chkShowSigText" onclick="enableRestoreButton()" />
+                                    <textarea cols="1" style="visibility: hidden;" rows="1" id="txtDisplay"></textarea>
+
+                                    <textarea cols="1" style="visibility: hidden;" rows="1" id="txtSignature"></textarea>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                <button type="button" class="btn btn-primary" onclick="SubmitSignature()">Submit Signature</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="modal" id="duplicateObject" tabindex="-1" role="dialog">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content" style="background-color: #fff0;">
+
+                            <div class="row d-flex justify-content-between align">
+
+                                <div class="card p-0 border-0 rounded-0 mb-5">
+                                    <div class="card border-0 rounded-0 card0">
+
+                                        <center>
+                                            <h3>Their is already a pending comment for this Object</h3>
+
+                                            <p>If You want to Over Write Click <b>Yes</b></p>
+                                        </center>
+
+                                        <div class="row justify-content-center mt-4">
+                                            <center>
+                                                <button type="submit" class="btn btn-primary px-5" onclick="SaveCommentDB(1)">Yes</button>
+                                                @*<button type="submit" class="btn btn-yellow px-5" data-dismiss="modal" aria-label="Close">No</button>*@
+                                                <button type="submit" class="btn btn-info px-5" onclick="GetPreviousComment()">Load Previous</button>
+                                            </center>
+                                        </div>
+
+                                    </div>
+                                </div>
+
+
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+
+               
+                <div class="modal fade" id="modal_bookmark" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h3 class="modal-title" id="exampleModalLabel">Insert Bookmark</h3>
+                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                <label class="font-weight-bold mb-0">Select Bookmark</label>
+
+                                <select name="cars" id="ddl_bookmark" class="form-control">
+                                    @{
+                                        dynamic obj = TempData["paracount"] as dynamic;
+                                        if (obj != null)
+                                        {
+                                            for (int i = 0; i < obj; i++)
+                                            {
+                                                int j = i;
+                                                j++;
+                                                string para = "PARA" + j;
+                                                <option value="@para">@para</option>
+                                            }
+                                        }
+                                    }
+                                </select>
+                                <br />
+                                <label class="font-weight-bold mb-0">Text to Display</label>
+                                <input type="text" id="bookmark_text" class="form-control">
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                <button type="button" class="btn btn-primary" onclick="AddBookmark()">Add</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+
+            </section>
+            @if (ViewBag.Title != null)
+            {
+                <i class="note-nav-link" />
+                <div class="alert alert-success">
+                    <strong>@ViewBag.Title</strong>
+                </div>
+            }
+        </div>
+
+    
+
+    </div>
+
+</body>
+
+@section Scripts
+{
+    @*<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/summernote/0.8.2/summernote.js"></script>*@
+
+
+    <script type="text/javascript" src="~/Content/summernote.js"></script>
+    @Scripts.Render("~/bundles/Script-custom-editor")
+
+
+    @*<link href="https://cdnjs.cloudflare.com/ajax/libs/summernote/0.8.2/summernote.css" rel="stylesheet">*@
+
+    <link href="~/Content/summernote.css" rel="stylesheet" />
+
+
+}
+<script>
+
+    var HightlightButton = function (context) {
+        var ui = $.summernote.ui;
+        var button = ui.button({
+            contents: '<i class="note-icon-link"/> ',
+            tooltip: 'Add Bookmark',
+            click: function () {
+                context.invoke('editor.foreColor', 'red');
+                //  do whatever you want here like open popup
+
+                $("#modal_bookmark").modal('show')
+            }
+        });
+
+        return button.render();
+    }
+
+
+    $(document).ready(function () {
+        $('.textarea-editor').summernote({
+            toolbar: [
+                ['style', ['highlight', 'bold', 'italic', 'underline', 'clear']],
+                ['font', ['strikethrough', 'superscript', 'subscript']],
+                ['para', ['ul', 'ol', 'paragraph']],
+
+                ['fontname', ['fontname']],
+                ['color', ['color']],
+
+                ['table', ['table']],
+                ['insert', ['link', 'picture', 'video']],
+                ['view', ['fullscreen', 'codeview', 'help']],
+
+                ['height', ['height']]
+
+            ],
+            buttons: {
+                highlight: HightlightButton,
+            },
+            placeholder: 'Insert Comment Here....',
+            tabsize: 2,
+            height: 300
+        });
+
+
+    });
+
+
+
+    $(document).ready(function () {
+        var x = document.getElementById("commentDiv");
+        x.onkeyup = function () {
+            var z = document.getElementById("comentBox").value;
+
+            if (document.getElementById("DocID") == null && document.getElementById("DocName") == null) {
+                return;
+            }
+            var id = document.getElementById("DocID").value;
+            var name = document.getElementById("DocName").value;
+
+
+            if (z != '') {
+                Url = '@Url.Action("SaveToSession", "Home")';
+                $.ajax({
+                    url: Url,
+                    type: 'POST',
+                    dataType: "json",
+                    contentType: 'application/json; charset=utf-8',
+                    data: JSON.stringify({
+                        Message: z, ID: id, Fname: name
+
+                    })
+
+
+
+                });
+            }
+        }
+            });
+
+
+
+
+    function SaveComment()
+    {
+        if (document.getElementById("name") == null || document.getElementById("Lpassword") == null)
+        {
+            alert("Please give User Name and Passowrd");
+
+            return;
+        }
+
+        if (document.getElementById("DocID") == null) {
+
+
+            alert("No Object Selected");
+            $("#exampleModal").modal('hide')
+            return;
+        }
+        var id = document.getElementById("DocID").value;
+        var name = document.getElementById("DocName").value;
+        var data = document.getElementById("comentBox").value;
+        var Name = document.getElementById("name").value;
+        var Lpassword = document.getElementById("Lpassword").value;
+        //var image = document.getElementById("imageBox").innerHTML;
+       
+        document.getElementById("img_load").style.visibility = "visible";
+        if (data != "")
+        {
+
+         Url = '@Url.Action("SaveCommentToMfile", "Home")';
+
+        $.ajax({
+                url: Url,
+                type: 'POST',
+                dataType: "json",
+                contentType: 'application/json; charset=utf-8',
+            data: JSON.stringify({
+                Message: data, name: Name, lpassword: Lpassword, ID: id, Fname: name
+
+                }),
+
+                success: function (data) {
+
+                    if (data.success == true)
+                    {
+                        alert(data.message);
+                        $("#exampleModal").modal('hide')
+                        $("#img_load").hide();
+                        //var url =
+
+                        var Url = "../Home/AddComment?ID=" + id + "&&name=" + name;
+                        window.location = Url;
+
+                    }
+                    else
+                    {
+
+                        alert(data.message)
+                        $("#img_load").hide();
+
+                    }
+
+
+                }
+            });
+        }
+
+        else {
+            alert("Fill Comment First")
+            document.getElementById("img_load").style.visibility = "hidden";
+
+        }
+
+
+    }
+
+
+    function SaveCommentDB(c)
+    {
+
+
+        if (document.getElementById("DocID") == null) {
+
+
+            alert("No Object Selected");
+            $("#exampleModal").modal('hide')
+            return;
+        }
+        var id = document.getElementById("DocID").value;
+        var name = document.getElementById("DocName").value;
+        var data = document.getElementById("comentBox").value;
+
+        if (data != "")
+        {
+             var Url = '@Url.Action("SaveCommentToDB", "Home")';
+
+
+            $.ajax({
+                url: Url,
+                type: 'POST',
+                dataType: "json",
+                contentType: 'application/json; charset=utf-8',
+            data: JSON.stringify({
+                Message: data, ID:id,Fname:name,code:c
+
+                }),
+
+                success: function (data) {
+
+                    if (data.success == true)
+                    {
+
+                        if (data.message == 'duplicate')
+                        {
+                            $("#duplicateObject").modal('show')
+
+                        }
+
+
+                        else
+                        {
+                            alert(data.message);
+                            $("#duplicateObject").modal('hide')
+
+                        }
+
+
+                    }
+                    else
+                    {
+
+                        alert(data.message)
+                        $("#duplicateObject").modal('hide')
+
+                    }
+
+
+                }
+            });
+        }
+
+        else {
+            alert("Fill Comment First")
+            $("#duplicateObject").modal('hide')
+
+
+        }
+
+
+    }
+
+
+    function AddBookmark()
+    {
+        var data = document.getElementById("comentBox").value;
+
+        if (document.getElementById("DocID") == null) {
+
+
+            alert("No Object Selected");
+            $("#modal_bookmark").modal('hide')
+            return;
+        }
+
+        if (document.getElementById("ddl_bookmark") == null || document.getElementById("bookmark_text") == null) {
+
+
+            alert("Please Fill the Bookmark Fields");
+
+            return;
+        }
+        var id = document.getElementById("DocID").value;
+        var name = document.getElementById("DocName").value;
+        var Bookmark_ID = document.getElementById("ddl_bookmark").value;
+        var display_text = document.getElementById("bookmark_text").value;
+
+             var Url = '@Url.Action("AddBoomark", "Home")';
+
+
+            $.ajax({
+                url: Url,
+                type: 'POST',
+                dataType: "json",
+                contentType: 'application/json; charset=utf-8',
+            data: JSON.stringify({
+                Message: data, ID: id, Fname: name, B_ID: Bookmark_ID, text: display_text
+
+                }),
+
+                success: function (data) {
+
+                    if (data.success == true)
+                    {
+
+
+                        $("#modal_bookmark").modal('hide');
+                         var Url = "../Home/AddComment?ID=" + id + "&&name=" + name;
+                        window.location = Url;
+
+
+                    }
+                    else
+                    {
+
+
+                    }
+
+
+                }
+            });
+
+
+
+
+    }
+
+
+    function Addsign()
+    {
+        if (document.getElementById("DocID") == null) {
+
+            $("#exampleModal").modal('hide');
+            alert("No Object Selected");
+
+            return;
+        }
+        var id = document.getElementById("DocID").value;
+        var name = document.getElementById("DocName").value;
+
+
+        if (document.getElementById("comentBox") == "")
+        {
+            alert("No Object Selected");
+
+            return;
+        }
+        var data = document.getElementById("comentBox").value;
+
+
+
+       $.ajax({
+                url: '@Url.Action("About", "Home")',
+                type: 'POST',
+                dataType: "json",
+                contentType: 'application/json; charset=utf-8',
+                data: JSON.stringify({
+                    Message: data, ID: id, Fname: name
+                }),
+
+                success: function (data) {
+
+                    if (data.success == true)
+                    {
+
+                        var Url = '@Url.Action("About", "Home")';
+
+                        window.location = Url;
+
+                    }
+                    else
+                    {
+
+                        alert("No data Found");
+                    }
+
+
+                }
+            });
+
+    }
+
+
+    function GetPreviousComment()
+    {
+        var idd = document.getElementById("DocID");
+
+        if (idd == null) {
+
+            alert("No Object Selected");
+            $("#exampleModal").modal('hide')
+            return;
+        }
+        var D_id = document.getElementById("DocID").value;
+        var name = document.getElementById("DocName").value;
+
+            $.ajax({
+                url: '@Url.Action("UploadComment", "Home")',
+                type: 'POST',
+                dataType: "json",
+                contentType: 'application/json; charset=utf-8',
+                data: JSON.stringify({
+                   D_ID: D_id
+                }),
+
+                success: function (data) {
+
+                    if (data.success == true)
+                    {
+
+                        var Url = "../Home/AddComment?ID=" + D_id + "&&name=" + name;
+
+                        window.location = Url;
+
+                    }
+                    else
+                    {
+
+                        alert("No data Found");
+                    }
+
+
+                }
+            });
+
+
+    }
+
+    function SubmitSignature()
+    {
+        var imageBox = document.getElementById("imageBox").innerHTML;
+        document.getElementById("imageBox1").innerHTML = imageBox;
+        $("#exampleModal").modal('hide');
+    }
+</script>

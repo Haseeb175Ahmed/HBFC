@@ -1,0 +1,324 @@
+﻿@{
+    ViewBag.Title = "Home Page";
+    Layout = null;
+
+    List<string> fileName = new List<string>();
+    string domain = "http://localhost/";
+}
+
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+    <title>Read text fileusing asp.net MVC</title>
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"
+            integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+            crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@9"></script>
+</head>
+
+<body style="border: 1px solid #DED8D8; width: 500px; height: 300px; font-family: Arial; margin-left: 50px">
+    @using (@Html.BeginForm("upload", "Home", FormMethod.Post,
+ new { enctype = "multipart/form-data" }))
+    {
+        if (TempData["Message"] != null)
+        {
+            <p style="font-family: Arial; font-size: 16px; font-weight: 200; color: red">@TempData["Message"]</p>
+        }
+        <table>
+            <tr>
+                <td style="padding-bottom: 35px" colspan="2">
+                    <h2 style="color: #FF5722">Upload Files TO M-Files</h2>
+                </td>
+            </tr>
+            <tr>
+
+                <td style="width: 200px;">
+                    <b style="color: #FF5722">Title</b>
+                </td>
+                <td>
+                    <input type="text" name="title" id="title" />
+                </td>
+            </tr>
+
+            <tr>
+
+                <td style="width: 200px;">
+                    <b style="color: #FF5722">Keyword</b>
+                </td>
+                <td>
+                    <input type="text" name="Keyword" id="Keyword" />
+                </td>
+            </tr>
+            <tr>
+
+                <td style="width: 200px;">
+                    <b style="color: #FF5722">choose Text file:</b>
+                </td>
+                <td>
+                    <input type="file" name="file" id="file" />
+                </td>
+            </tr>
+            <tr>
+                <td>&nbsp;</td>
+                <td colspan="2" style="padding-top: 30px">
+                    <input type="submit" class="btn btn-primary" value="Upload Object" name="submit" />
+                </td>
+            </tr>
+        </table>
+    }
+    <button class="btn btn-primary" onclick="Update()">Update All Objects</button>
+
+
+
+
+    <div>
+        @using (@Html.BeginForm("DownloadFile", "Home", FormMethod.Post,
+new { enctype = "multipart/form-data" }))
+        {
+
+            <table class="table table-dark">
+                <thead>
+                    <tr>
+
+                        <th scope="col">Object Name</th>
+                        <th scope="col">Preview</th>
+
+
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        if (Model.Count > 0)
+                        {
+                            string url = string.Format(domain + "REST/objects/{0}/{1}/{2}/files/{3}/content",
+                                         Model[0].Obj_Type, Model[0].Obj_ID, Model[0].Obj_Version, Model[0].ObjectVersionID);
+                            TempData[Model[0].fileName] = url;
+
+                            fileName.Add(Model[0].fileName);
+                            TempData["FileNames"] = fileName;
+                            <tr>
+
+                                <td>@Model[0].fileName</td>
+                                <td>
+                                    <input type="text" class="btn btn-primary" hidden name="url" value="@Model[0].fileName" />
+
+                                    <input type="submit" class="btn btn-primary btn-link" value="Download File" name="submit" />
+
+
+                                    <button class="btn btn-primary" type="button" onclick="ShowWorkFlowState('@Model[0].Obj_ID','@Model[0].Obj_Type','@Model[0].Obj_Version')">Show WorkFlow State</button>
+
+
+                                </td>
+
+
+                            </tr>
+                        }
+                    }
+
+                </tbody>
+            </table>
+        }
+    </div>
+
+
+    @{
+        if (Model.Count > 1)
+        {
+            for (int i = 1; i < Model.Count; i++)
+            {
+                <div>
+                    @using (@Html.BeginForm("DownloadFile", "Home", FormMethod.Post,
+                 new { enctype = "multipart/form-data" }))
+                    {
+
+                        <table class="table table-dark">
+
+                            <tbody>
+                                @{
+
+                                    string url = string.Format(domain+"REST/objects/{0}/{1}/{2}/files/{3}/content",
+                                                   Model[i].Obj_Type, Model[i].Obj_ID, Model[i].Obj_Version, Model[i].ObjectVersionID);
+                                    TempData[Model[i].fileName] = url;
+                                    fileName.Add(Model[i].fileName);
+                                    TempData["FileNames"] = fileName;
+                                    <tr>
+
+                                        <td>@Model[i].fileName</td>
+                                        <td>
+                                            <input type="text" class="btn btn-primary" hidden name="url" value="@Model[i].fileName" />
+
+                                            <input type="submit" class="btn btn-primary btn-link" value="Download File" name="submit" />
+                                            <button class="btn btn-primary" type="button" onclick="ShowWorkFlowState('@Model[i].Obj_ID','@Model[i].Obj_Type','@Model[i].Obj_Version')">Show WorkFlow State</button>
+
+                                        </td>
+
+
+                                    </tr>
+
+                                }
+
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+        }
+    }
+
+    <div class="modal fade" id="StateModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalCenterTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Work Flow States</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <label>Current State</label>
+                        </div>
+                        <div class="col-lg-6">
+                            <input type="text" class="form-control" id="statename" />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <label>WorkFlow Name</label>
+                        </div>
+                        <div class="col-lg-6">
+                            <input type="text" class="form-control" id="workflow" />
+                        </div>
+                        </div>
+                    </div>
+                   
+                <div class="modal-footer">
+
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+   
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
+
+    <script>
+        function Upload(url) {
+
+
+            $.ajaxSetup({
+                beforeSend: function (jqXHR, settings) {
+                    if (settings.dataType === 'binary') {
+                        settings.xhr().responseType = 'arraybuffer';
+                    }
+                }
+            });
+
+            $.ajax({
+                type: "POST",
+                url: "/Home/DownloadFile",
+                data: JSON.stringify({ url: furl }),
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (byteArray) {
+                    alert(byteArray);
+                },
+            });
+        }
+
+
+        function Update() {
+
+
+
+            $.ajax({
+                url: '@Url.Action("UpdateObject", "Home")',
+
+                type: 'POST',
+                dataType: "json",
+                contentType: 'application/json; charset=utf-8',
+
+                success: function (data) {
+                    if (data.success == true) {
+
+                        Swal.fire({
+                            icon: 'Success',
+
+                            text: data.message,
+                            showConfirmButton: true
+                        }).then((result) => {
+                            if (result.value) {
+
+                                var url = '@Url.Action("Index", "Home")';
+                                window.location.href = url;
+                            }
+                        });
+
+                    }
+                    else {
+
+                        Swal.fire({
+                            icon: 'Error',
+                            title: 'Invalid Email/Password',
+                            text: data.message,
+                        });
+                    }
+                }
+           });
+        }
+
+
+
+
+        function ShowWorkFlowState(ObjID, type, version) {
+
+
+
+            $.ajax({
+                url: '@Url.Action("GetWorkFlow", "Home")',
+
+                type: 'POST',
+                dataType: "json",
+                contentType: 'application/json; charset=utf-8',
+                data: JSON.stringify({ ObjID: ObjID, type: type, version: version}),
+                success: function (data) {
+                    if (data.success == true) {
+
+                        if (data.message.StateName != null && data.message.WorkflowName != null)
+                        {
+                            $('#statename').val(data.message.StateName);
+                            $('#workflow').val(data.message.WorkflowName);
+                            $('#StateModal').modal('show');
+                        }
+                        else
+                        {
+                            Swal.fire({
+                                icon: 'Error',
+                                title: 'No WorkFlow Assigned',
+                               
+                            });
+                        }
+                        
+
+                    }
+                    else {
+
+                        Swal.fire({
+                            icon: 'Error',
+                            title: 'Something went wrong',
+                            text: data.message,
+                        });
+                    }
+                }
+           });
+        }
+
+    </script>
+</body>
+
+
+</html>
